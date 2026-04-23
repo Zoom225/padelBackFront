@@ -54,10 +54,21 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGenericException() {
+    public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
+        // Log complet pour débogage
+        ex.printStackTrace();
+        System.err.println("=== UNEXPECTED EXCEPTION ===");
+        System.err.println("Exception type: " + ex.getClass().getName());
+        System.err.println("Message: " + ex.getMessage());
+        System.err.println("Cause: " + ex.getCause());
+        System.err.println("============================");
+
+        // Retourner le message réel de l'exception
+        String message = ex.getMessage() != null ? ex.getMessage() : "An unexpected error occurred";
+
         ErrorResponse error = ErrorResponse.builder()
                 .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
-                .message("An unexpected error occurred")
+                .message(message)
                 .timestamp(LocalDateTime.now())
                 .build();
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);

@@ -45,6 +45,11 @@ public class Match extends BaseEntity {
     @Column(nullable = false)
     private StatutMatch statut;
 
+    // Colonne legacy conservée pour compatibilité base (NOT NULL)
+    @Builder.Default
+    @Column(name = "nb_joueurs_actuels", nullable = false)
+    private Integer nbJoueursActuels = 0;
+
 
     @Column(nullable = false)
     private Double prixTotal;

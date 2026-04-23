@@ -74,6 +74,7 @@ public class MatchServiceImpl implements MatchService {
         match.setPrixTotal(MATCH_PRICE);
         match.setPrixParJoueur(MATCH_PRICE / MAX_PLAYERS);
         match.setStatut(StatutMatch.PLANIFIE);
+        match.setNbJoueursActuels(0);
 
         log.info("Match created by member {} on terrain {} at {}",
                 organisateurId, terrainId, match.getDate());
@@ -166,7 +167,10 @@ public class MatchServiceImpl implements MatchService {
 
     @Override
     public List<Match> getByOrganisateurId(Long organisateurId) {
-        return matchRepository.findByOrganisateurId(organisateurId);
+        return matchRepository.findByOrganisateurId(organisateurId)
+                .stream()
+                .filter(match -> match.getStatut() != StatutMatch.ANNULE)
+                .toList();
     }
 
     @Override
@@ -217,6 +221,7 @@ public class MatchServiceImpl implements MatchService {
             throw new BusinessException("Match is already full");
         }
 
+        match.setNbJoueursActuels(confirmedPlayers);
         match.setStatut(confirmedPlayers == MAX_PLAYERS ? StatutMatch.COMPLET : StatutMatch.PLANIFIE);
 
         matchRepository.save(match);
@@ -230,6 +235,7 @@ public class MatchServiceImpl implements MatchService {
                 .countReservationsByMatchIdAndStatut(matchId, StatutReservation.CONFIRMEE);
 
         if (match.getStatut() != StatutMatch.ANNULE) {
+            match.setNbJoueursActuels(confirmedPlayers);
             match.setStatut(confirmedPlayers >= MAX_PLAYERS ? StatutMatch.COMPLET : StatutMatch.PLANIFIE);
         }
         matchRepository.save(match);

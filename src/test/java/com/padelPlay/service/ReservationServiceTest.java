@@ -162,7 +162,7 @@ class ReservationServiceTest {
             when(reservationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(paiementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-            Reservation result = reservationService.create(11L, 2L, 1L);
+            Reservation result = reservationService.create(11L, 2L, 2L);
 
             assertThat(result).isNotNull();
             assertThat(result.getStatut()).isEqualTo(StatutReservation.EN_ATTENTE);
@@ -174,6 +174,35 @@ class ReservationServiceTest {
                     paiement.getMontant().equals(15.0) &&
                             paiement.getStatut() == StatutPaiement.EN_ATTENTE
             ));
+        }
+
+        @Test
+        @DisplayName("❌ should throw BusinessException when requesterId is missing")
+        void shouldThrowWhenRequesterIdIsMissing() {
+            when(matchService.getById(11L)).thenReturn(matchPublic);
+            when(membreService.getById(2L)).thenReturn(joueur);
+
+            assertThatThrownBy(() -> reservationService.create(11L, 2L, null))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("Requester id is required");
+
+            verify(reservationRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("❌ should throw BusinessException when member tries to join PUBLIC match for someone else")
+        void shouldThrowWhenRequesterTriesPublicJoinForAnotherMember() {
+            when(matchService.getById(11L)).thenReturn(matchPublic);
+            when(membreService.getById(2L)).thenReturn(joueur);
+            when(reservationRepository.existsByMatchIdAndMembreId(11L, 2L)).thenReturn(false);
+            when(membreService.hasActivePenalty(2L)).thenReturn(false);
+            when(membreService.hasOutstandingBalance(2L)).thenReturn(false);
+
+            assertThatThrownBy(() -> reservationService.create(11L, 2L, 1L))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("Public match : a member can only join for themselves");
+
+            verify(reservationRepository, never()).save(any());
         }
 
         @Test
@@ -214,7 +243,7 @@ class ReservationServiceTest {
             when(matchService.getById(11L)).thenReturn(matchPublic);
             when(membreService.getById(2L)).thenReturn(joueur);
 
-            assertThatThrownBy(() -> reservationService.create(11L, 2L, 1L))
+            assertThatThrownBy(() -> reservationService.create(11L, 2L, 2L))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("cancelled");
 
@@ -228,7 +257,7 @@ class ReservationServiceTest {
             when(membreService.getById(2L)).thenReturn(joueur);
             when(reservationRepository.existsByMatchIdAndMembreId(11L, 2L)).thenReturn(true);
 
-            assertThatThrownBy(() -> reservationService.create(11L, 2L, 1L))
+            assertThatThrownBy(() -> reservationService.create(11L, 2L, 2L))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("already registered");
 
@@ -243,7 +272,7 @@ class ReservationServiceTest {
             when(reservationRepository.existsByMatchIdAndMembreId(11L, 2L)).thenReturn(false);
             when(membreService.hasActivePenalty(2L)).thenReturn(true);
 
-            assertThatThrownBy(() -> reservationService.create(11L, 2L, 1L))
+            assertThatThrownBy(() -> reservationService.create(11L, 2L, 2L))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("active penalty");
 
@@ -259,7 +288,7 @@ class ReservationServiceTest {
             when(membreService.hasActivePenalty(2L)).thenReturn(false);
             when(membreService.hasOutstandingBalance(2L)).thenReturn(true);
 
-            assertThatThrownBy(() -> reservationService.create(11L, 2L, 1L))
+            assertThatThrownBy(() -> reservationService.create(11L, 2L, 2L))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("outstanding balance");
 
@@ -294,7 +323,7 @@ class ReservationServiceTest {
             when(membreService.hasActivePenalty(3L)).thenReturn(false);
             when(membreService.hasOutstandingBalance(3L)).thenReturn(false);
 
-            assertThatThrownBy(() -> reservationService.create(11L, 3L, 1L))
+            assertThatThrownBy(() -> reservationService.create(11L, 3L, 3L))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("only book on their own site");
 
@@ -312,7 +341,7 @@ class ReservationServiceTest {
             when(reservationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(paiementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-            reservationService.create(11L, 2L, 1L);
+            reservationService.create(11L, 2L, 2L);
 
             // prixParJoueur = 60€ / 4 = 15€
             verify(paiementRepository).save(argThat(p ->

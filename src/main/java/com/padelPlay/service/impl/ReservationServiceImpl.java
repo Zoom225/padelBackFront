@@ -35,6 +35,10 @@ public class ReservationServiceImpl implements ReservationService {
         Match match = matchService.getById(matchId);
         Membre membre = membreService.getById(membreId);
 
+        if (requesterId == null) {
+            throw new BusinessException("Requester id is required");
+        }
+
         // règle : match doit être PLANIFIE
         if (match.getStatut() == StatutMatch.COMPLET) {
             throw new BusinessException("Match is already full");
@@ -59,10 +63,15 @@ public class ReservationServiceImpl implements ReservationService {
         }
 
         // règle : match privé → seul l'organisateur peut ajouter des joueurs
-        // requesterId = celui qui fait la requête (doit être l'organisateur)
-        if (match.getTypeMatch() == TypeMatch.PRIVE
-                && !match.getOrganisateur().getId().equals(requesterId)) {
-            throw new BusinessException("Private match : only the organizer can add players");
+        // règle : match public → un membre ne peut rejoindre que pour lui-même
+        if (match.getTypeMatch() == TypeMatch.PRIVE) {
+            if (!match.getOrganisateur().getId().equals(requesterId)) {
+                throw new BusinessException("Private match : only the organizer can add players");
+            }
+        } else {
+            if (!requesterId.equals(membreId)) {
+                throw new BusinessException("Public match : a member can only join for themselves");
+            }
         }
 
         // règle : membre SITE ne peut réserver que sur son site
