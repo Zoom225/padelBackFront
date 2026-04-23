@@ -3,10 +3,16 @@ package com.padelPlay.mapper;
 import com.padelPlay.dto.request.MatchRequest;
 import com.padelPlay.dto.response.MatchResponse;
 import com.padelPlay.entity.Match;
+import com.padelPlay.entity.enums.StatutReservation;
+import com.padelPlay.repository.ReservationRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class MatchMapper {
+
+    private final ReservationRepository reservationRepository;
 
     public Match toEntity(MatchRequest request) {
         return Match.builder()
@@ -31,7 +37,12 @@ public class MatchMapper {
                 .heureFin(match.getHeureFin())
                 .typeMatch(match.getTypeMatch())
                 .statut(match.getStatut())
-                .nbJoueursActuels(match.getNbJoueursActuels())
+                .nbJoueursActuels(
+                        (int) reservationRepository.countReservationsByMatchIdAndStatut(
+                                match.getId(),
+                                StatutReservation.CONFIRMEE
+                        )
+                )
                 .prixParJoueur(match.getPrixParJoueur())
                 .dateConversionPublic(match.getDateConversionPublic())
                 .build();

@@ -46,7 +46,7 @@ public class ReservationController {
                     "A pending payment (EN_ATTENTE) is automatically created alongside the reservation. " +
                     "The reservation is not confirmed until the payment is completed via POST /api/paiements. " +
                     "Business rules enforced: " +
-                    "1. The match must not be full (nbJoueursActuels < 4) and must not be cancelled. " +
+                    "1. The match must not be full (confirmed reservations < 4) and must not be cancelled. " +
                     "2. The member must not already be registered in this match. " +
                     "3. The member must not have an active penalty. " +
                     "4. The member must not have an outstanding balance. " +
@@ -143,7 +143,7 @@ public class ReservationController {
             summary = "Cancel a reservation",
             description = "Cancels an existing reservation and frees up the spot in the match. " +
                     "If the payment was already completed (PAYE), it is automatically marked as REMBOURSE. " +
-                    "The match player count (nbJoueursActuels) is decremented automatically. " +
+                    "The match player count is recalculated automatically from confirmed reservations. " +
                     "If the match was COMPLET, it returns to PLANIFIE status after cancellation, " +
                     "making it joinable again by other members.",
             security = @SecurityRequirement(name = "Bearer Auth")

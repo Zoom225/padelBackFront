@@ -45,8 +45,8 @@ public class PaiementController {
                     "2. The outstanding balance is cleared from the member account. " +
                     "3. The payment status changes from EN_ATTENTE to PAYE. " +
                     "4. The reservation status changes from EN_ATTENTE to CONFIRMEE. " +
-                    "5. The match player count (nbJoueursActuels) is incremented. " +
-                    "6. If nbJoueursActuels reaches 4, the match status changes to COMPLET. " +
+                    "5. The match player count is recalculated from confirmed reservations. " +
+                    "6. If confirmed reservations reach 4, the match status changes to COMPLET. " +
                     "For PUBLIC matches, payment is the validation step — first paid = first served."
     )
     @ApiResponses({

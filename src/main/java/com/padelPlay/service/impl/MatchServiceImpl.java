@@ -4,10 +4,12 @@ import com.padelPlay.entity.Match;
 import com.padelPlay.entity.Membre;
 import com.padelPlay.entity.Terrain;
 import com.padelPlay.entity.enums.StatutMatch;
+import com.padelPlay.entity.enums.StatutReservation;
 import com.padelPlay.entity.enums.TypeMatch;
 import com.padelPlay.exception.BusinessException;
 import com.padelPlay.exception.ResourceNotFoundException;
 import com.padelPlay.repository.MatchRepository;
+import com.padelPlay.repository.ReservationRepository;
 import com.padelPlay.service.MatchService;
 import com.padelPlay.service.MembreService;
 import com.padelPlay.service.TerrainService;
@@ -31,6 +33,7 @@ public class MatchServiceImpl implements MatchService {
     private static final double MATCH_PRICE  = 60.0;
 
     private final MatchRepository matchRepository;
+    private final ReservationRepository reservationRepository;
     private final MembreService membreService;
     private final TerrainService terrainService;
 
@@ -68,7 +71,6 @@ public class MatchServiceImpl implements MatchService {
         match.setOrganisateur(organisateur);
         match.setTerrain(terrain);
         match.setHeureFin(heureFin);
-        match.setNbJoueursActuels(1);
         match.setPrixTotal(MATCH_PRICE);
         match.setPrixParJoueur(MATCH_PRICE / MAX_PLAYERS);
         match.setStatut(StatutMatch.PLANIFIE);
@@ -196,7 +198,7 @@ public class MatchServiceImpl implements MatchService {
                 .findByDateAndStatut(tomorrow, StatutMatch.PLANIFIE)
                 .stream()
                 .filter(m -> m.getTypeMatch() == TypeMatch.PRIVE)
-                .filter(m -> m.getNbJoueursActuels() < MAX_PLAYERS)
+                .filter(m -> !isMatchFull(m.getId()))
                 .toList();
 
         expiredMatches.forEach(m -> convertToPublic(m.getId()));
@@ -208,16 +210,14 @@ public class MatchServiceImpl implements MatchService {
     @Transactional
     public void incrementPlayers(Long matchId) {
         Match match = getById(matchId);
+        int confirmedPlayers = (int) reservationRepository
+                .countReservationsByMatchIdAndStatut(matchId, StatutReservation.CONFIRMEE);
 
-        if (match.getNbJoueursActuels() >= MAX_PLAYERS) {
+        if (confirmedPlayers > MAX_PLAYERS) {
             throw new BusinessException("Match is already full");
         }
 
-        match.setNbJoueursActuels(match.getNbJoueursActuels() + 1);
-
-        if (match.getNbJoueursActuels() == MAX_PLAYERS) {
-            match.setStatut(StatutMatch.COMPLET);
-        }
+        match.setStatut(confirmedPlayers == MAX_PLAYERS ? StatutMatch.COMPLET : StatutMatch.PLANIFIE);
 
         matchRepository.save(match);
     }
@@ -226,20 +226,19 @@ public class MatchServiceImpl implements MatchService {
     @Transactional
     public void decrementPlayers(Long matchId) {
         Match match = getById(matchId);
+        int confirmedPlayers = (int) reservationRepository
+                .countReservationsByMatchIdAndStatut(matchId, StatutReservation.CONFIRMEE);
 
-        if (match.getNbJoueursActuels() <= 0) {
-            throw new BusinessException("Match already has 0 players");
+        if (match.getStatut() != StatutMatch.ANNULE) {
+            match.setStatut(confirmedPlayers >= MAX_PLAYERS ? StatutMatch.COMPLET : StatutMatch.PLANIFIE);
         }
-
-        match.setNbJoueursActuels(match.getNbJoueursActuels() - 1);
-        match.setStatut(StatutMatch.PLANIFIE);
         matchRepository.save(match);
     }
 
     @Override
     public boolean isMatchFull(Long matchId) {
-        Match match = getById(matchId);
-        return match.getNbJoueursActuels() >= MAX_PLAYERS;
+        return reservationRepository.countReservationsByMatchIdAndStatut(matchId, StatutReservation.CONFIRMEE)
+                >= MAX_PLAYERS;
     }
 
     @Override

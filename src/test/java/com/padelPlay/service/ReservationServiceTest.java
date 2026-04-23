@@ -112,7 +112,6 @@ class ReservationServiceTest {
                 .heureFin(LocalTime.of(16, 30))
                 .typeMatch(TypeMatch.PRIVE)
                 .statut(StatutMatch.PLANIFIE)
-                .nbJoueursActuels(1)
                 .prixTotal(60.0)
                 .prixParJoueur(15.0)
                 .build();
@@ -126,7 +125,6 @@ class ReservationServiceTest {
                 .heureFin(LocalTime.of(18, 30))
                 .typeMatch(TypeMatch.PUBLIC)
                 .statut(StatutMatch.PLANIFIE)
-                .nbJoueursActuels(1)
                 .prixTotal(60.0)
                 .prixParJoueur(15.0)
                 .build();
@@ -140,7 +138,6 @@ class ReservationServiceTest {
                 .heureFin(LocalTime.of(20, 30))
                 .typeMatch(TypeMatch.PUBLIC)
                 .statut(StatutMatch.COMPLET)
-                .nbJoueursActuels(4)
                 .prixTotal(60.0)
                 .prixParJoueur(15.0)
                 .build();

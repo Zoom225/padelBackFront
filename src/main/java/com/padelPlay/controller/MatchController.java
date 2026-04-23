@@ -41,7 +41,8 @@ public class MatchController {
     @Operation(
             summary = "Create a new match",
             description = "Creates a new match on a specific court. " +
-                    "The organizer is automatically registered as the first player (nbJoueursActuels = 1). " +
+                    "The organizer is not auto-added as a player at creation time. " +
+                    "The current player count is calculated dynamically from confirmed reservations. " +
                     "Business rules enforced on creation: " +
                     "1. The organizer must not have an active penalty. " +
                     "2. The organizer must not have an outstanding balance. " +

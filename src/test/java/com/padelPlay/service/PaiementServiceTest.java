@@ -87,7 +87,6 @@ class PaiementServiceTest {
                 .heureFin(LocalTime.of(16, 30))
                 .typeMatch(TypeMatch.PUBLIC)
                 .statut(StatutMatch.PLANIFIE)
-                .nbJoueursActuels(1)
                 .prixTotal(60.0)
                 .prixParJoueur(15.0)
                 .build();

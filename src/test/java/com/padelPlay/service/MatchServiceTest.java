@@ -2,11 +2,13 @@ package com.padelPlay.service;
 
 import com.padelPlay.entity.*;
 import com.padelPlay.entity.enums.StatutMatch;
+import com.padelPlay.entity.enums.StatutReservation;
 import com.padelPlay.entity.enums.TypeMatch;
 import com.padelPlay.entity.enums.TypeMembre;
 import com.padelPlay.exception.BusinessException;
 import com.padelPlay.exception.ResourceNotFoundException;
 import com.padelPlay.repository.MatchRepository;
+import com.padelPlay.repository.ReservationRepository;
 import com.padelPlay.service.impl.MatchServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -34,6 +36,9 @@ class MatchServiceTest {
 
     @Mock
     private MatchRepository matchRepository;
+
+    @Mock
+    private ReservationRepository reservationRepository;
 
     @Mock
     private MembreService membreService;
@@ -108,7 +113,6 @@ class MatchServiceTest {
                 .heureFin(LocalTime.of(16, 30))
                 .typeMatch(TypeMatch.PRIVE)
                 .statut(StatutMatch.PLANIFIE)
-                .nbJoueursActuels(1)
                 .prixTotal(60.0)
                 .prixParJoueur(15.0)
                 .build();
@@ -121,7 +125,6 @@ class MatchServiceTest {
                 .heureFin(LocalTime.of(18, 30))
                 .typeMatch(TypeMatch.PUBLIC)
                 .statut(StatutMatch.PLANIFIE)
-                .nbJoueursActuels(1)
                 .prixTotal(60.0)
                 .prixParJoueur(15.0)
                 .build();
@@ -155,7 +158,6 @@ class MatchServiceTest {
             assertThat(result).isNotNull();
             assertThat(result.getTypeMatch()).isEqualTo(TypeMatch.PRIVE);
             assertThat(result.getStatut()).isEqualTo(StatutMatch.PLANIFIE);
-            assertThat(result.getNbJoueursActuels()).isEqualTo(1);
             assertThat(result.getPrixTotal()).isEqualTo(60.0);
             assertThat(result.getPrixParJoueur()).isEqualTo(15.0);
             assertThat(result.getHeureFin()).isEqualTo(LocalTime.of(16, 30));
@@ -180,7 +182,7 @@ class MatchServiceTest {
             Match result = matchService.create(match, 1L, 1L);
 
             assertThat(result.getTypeMatch()).isEqualTo(TypeMatch.PUBLIC);
-            assertThat(result.getNbJoueursActuels()).isEqualTo(1);
+            assertThat(result.getStatut()).isEqualTo(StatutMatch.PLANIFIE);
         }
 
         @Test
@@ -419,7 +421,6 @@ class MatchServiceTest {
                     .heureFin(LocalTime.of(11, 30))
                     .typeMatch(TypeMatch.PRIVE)
                     .statut(StatutMatch.PLANIFIE)
-                    .nbJoueursActuels(1)
                     .prixTotal(60.0)
                     .prixParJoueur(15.0)
                     .build();
@@ -458,7 +459,6 @@ class MatchServiceTest {
                     .heureFin(startSoon.toLocalTime().withSecond(0).withNano(0).plusMinutes(90))
                     .typeMatch(TypeMatch.PRIVE)
                     .statut(StatutMatch.PLANIFIE)
-                    .nbJoueursActuels(1)
                     .prixTotal(60.0)
                     .prixParJoueur(15.0)
                     .build();
@@ -563,40 +563,41 @@ class MatchServiceTest {
     // INCREMENT / DECREMENT PLAYERS
     // ================================================================
     @Nested
-    @DisplayName("incrementPlayers() and decrementPlayers()")
+    @DisplayName("incrementPlayers() and decrementPlayers() with reservation counts")
     class PlayersTests {
 
         @Test
-        @DisplayName("✅ should increment nbJoueursActuels from 1 to 2")
+        @DisplayName("✅ should keep PLANIFIE when confirmed reservations are below 4")
         void shouldIncrementPlayers() {
-            matchPrive.setNbJoueursActuels(1);
+            matchPrive.setId(1L);
             when(matchRepository.findById(1L)).thenReturn(Optional.of(matchPrive));
+            when(reservationRepository.countReservationsByMatchIdAndStatut(1L, StatutReservation.CONFIRMEE)).thenReturn(2L);
             when(matchRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             matchService.incrementPlayers(1L);
 
-            assertThat(matchPrive.getNbJoueursActuels()).isEqualTo(2);
             assertThat(matchPrive.getStatut()).isEqualTo(StatutMatch.PLANIFIE);
         }
 
         @Test
-        @DisplayName("✅ should set statut to COMPLET when nbJoueursActuels reaches 4")
+        @DisplayName("✅ should set statut to COMPLET when confirmed reservations reach 4")
         void shouldSetCompletWhenFull() {
-            matchPrive.setNbJoueursActuels(3);
+            matchPrive.setId(1L);
             when(matchRepository.findById(1L)).thenReturn(Optional.of(matchPrive));
+            when(reservationRepository.countReservationsByMatchIdAndStatut(1L, StatutReservation.CONFIRMEE)).thenReturn(4L);
             when(matchRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             matchService.incrementPlayers(1L);
 
-            assertThat(matchPrive.getNbJoueursActuels()).isEqualTo(4);
             assertThat(matchPrive.getStatut()).isEqualTo(StatutMatch.COMPLET);
         }
 
         @Test
-        @DisplayName("❌ should throw BusinessException when match is already full — cannot add 5th player")
+        @DisplayName("❌ should throw BusinessException when confirmed reservations are already above 4")
         void shouldThrowWhenMatchAlreadyFull() {
-            matchPrive.setNbJoueursActuels(4);
+            matchPrive.setId(1L);
             when(matchRepository.findById(1L)).thenReturn(Optional.of(matchPrive));
+            when(reservationRepository.countReservationsByMatchIdAndStatut(1L, StatutReservation.CONFIRMEE)).thenReturn(5L);
 
             assertThatThrownBy(() -> matchService.incrementPlayers(1L))
                     .isInstanceOf(BusinessException.class)
@@ -604,28 +605,30 @@ class MatchServiceTest {
         }
 
         @Test
-        @DisplayName("✅ should decrement nbJoueursActuels and reset statut to PLANIFIE")
+        @DisplayName("✅ should reset statut to PLANIFIE when confirmed reservations are below 4")
         void shouldDecrementPlayers() {
-            matchPrive.setNbJoueursActuels(4);
+            matchPrive.setId(1L);
             matchPrive.setStatut(StatutMatch.COMPLET);
             when(matchRepository.findById(1L)).thenReturn(Optional.of(matchPrive));
+            when(reservationRepository.countReservationsByMatchIdAndStatut(1L, StatutReservation.CONFIRMEE)).thenReturn(3L);
             when(matchRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             matchService.decrementPlayers(1L);
 
-            assertThat(matchPrive.getNbJoueursActuels()).isEqualTo(3);
             assertThat(matchPrive.getStatut()).isEqualTo(StatutMatch.PLANIFIE);
         }
 
         @Test
-        @DisplayName("❌ should throw BusinessException when decrementing below 0 players")
-        void shouldThrowWhenDecrementingBelowZero() {
-            matchPrive.setNbJoueursActuels(0);
+        @DisplayName("✅ should keep PLANIFIE when confirmed reservations are 0")
+        void shouldKeepPlanifieWhenNoConfirmedPlayers() {
+            matchPrive.setId(1L);
             when(matchRepository.findById(1L)).thenReturn(Optional.of(matchPrive));
+            when(reservationRepository.countReservationsByMatchIdAndStatut(1L, StatutReservation.CONFIRMEE)).thenReturn(0L);
+            when(matchRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-            assertThatThrownBy(() -> matchService.decrementPlayers(1L))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("0 players");
+            matchService.decrementPlayers(1L);
+
+            assertThat(matchPrive.getStatut()).isEqualTo(StatutMatch.PLANIFIE);
         }
     }
 
@@ -637,19 +640,17 @@ class MatchServiceTest {
     class IsMatchFullTests {
 
         @Test
-        @DisplayName("✅ should return true when match has 4 players")
+        @DisplayName("✅ should return true when match has 4 confirmed reservations")
         void shouldReturnTrueWhenFull() {
-            matchPrive.setNbJoueursActuels(4);
-            when(matchRepository.findById(1L)).thenReturn(Optional.of(matchPrive));
+            when(reservationRepository.countReservationsByMatchIdAndStatut(1L, StatutReservation.CONFIRMEE)).thenReturn(4L);
 
             assertThat(matchService.isMatchFull(1L)).isTrue();
         }
 
         @Test
-        @DisplayName("✅ should return false when match has less than 4 players")
+        @DisplayName("✅ should return false when match has less than 4 confirmed reservations")
         void shouldReturnFalseWhenNotFull() {
-            matchPrive.setNbJoueursActuels(2);
-            when(matchRepository.findById(1L)).thenReturn(Optional.of(matchPrive));
+            when(reservationRepository.countReservationsByMatchIdAndStatut(1L, StatutReservation.CONFIRMEE)).thenReturn(2L);
 
             assertThat(matchService.isMatchFull(1L)).isFalse();
         }
@@ -673,11 +674,12 @@ class MatchServiceTest {
                     .date(tomorrow)
                     .typeMatch(TypeMatch.PRIVE)
                     .statut(StatutMatch.PLANIFIE)
-                    .nbJoueursActuels(2) // pas complet
                     .build();
+            expiredMatch.setId(20L);
 
             when(matchRepository.findByDateAndStatut(tomorrow, StatutMatch.PLANIFIE))
                     .thenReturn(List.of(expiredMatch));
+            when(reservationRepository.countReservationsByMatchIdAndStatut(20L, StatutReservation.CONFIRMEE)).thenReturn(2L);
             when(matchRepository.findById(any())).thenReturn(Optional.of(expiredMatch));
             when(matchRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -698,11 +700,12 @@ class MatchServiceTest {
                     .date(tomorrow)
                     .typeMatch(TypeMatch.PRIVE)
                     .statut(StatutMatch.PLANIFIE)
-                    .nbJoueursActuels(4) // complet → ne doit pas être converti
                     .build();
+            fullMatch.setId(21L);
 
             when(matchRepository.findByDateAndStatut(tomorrow, StatutMatch.PLANIFIE))
                     .thenReturn(List.of(fullMatch));
+            when(reservationRepository.countReservationsByMatchIdAndStatut(21L, StatutReservation.CONFIRMEE)).thenReturn(4L);
 
             matchService.checkAndConvertExpiredPrivateMatches();
 
@@ -722,7 +725,6 @@ class MatchServiceTest {
                     .date(tomorrow)
                     .typeMatch(TypeMatch.PUBLIC)
                     .statut(StatutMatch.PLANIFIE)
-                    .nbJoueursActuels(1)
                     .build();
 
             when(matchRepository.findByDateAndStatut(tomorrow, StatutMatch.PLANIFIE))

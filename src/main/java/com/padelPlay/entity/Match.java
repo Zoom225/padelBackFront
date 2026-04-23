@@ -45,8 +45,6 @@ public class Match extends BaseEntity {
     @Column(nullable = false)
     private StatutMatch statut;
 
-    @Column(nullable = false)
-    private Integer nbJoueursActuels;
 
     @Column(nullable = false)
     private Double prixTotal;
