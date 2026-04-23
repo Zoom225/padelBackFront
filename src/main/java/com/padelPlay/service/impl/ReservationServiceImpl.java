@@ -89,7 +89,9 @@ public class ReservationServiceImpl implements ReservationService {
                 .statut(StatutPaiement.EN_ATTENTE)
                 .build();
 
-        paiementRepository.save(paiement);
+        paiement = paiementRepository.save(paiement);
+        reservation.setPaiement(paiement);
+        reservation = reservationRepository.save(reservation);
 
         log.info("Reservation created for member {} on match {}", membreId, matchId);
 
@@ -116,6 +118,7 @@ public class ReservationServiceImpl implements ReservationService {
     @Transactional
     public void cancel(Long reservationId) {
         Reservation reservation = getById(reservationId);
+        boolean wasConfirmed = reservation.getStatut() == StatutReservation.CONFIRMEE;
 
         if (reservation.getStatut() == StatutReservation.ANNULEE) {
             throw new BusinessException("Reservation is already cancelled");
@@ -131,8 +134,10 @@ public class ReservationServiceImpl implements ReservationService {
             paiementRepository.save(paiement);
         }
 
-        // décrémenter le nombre de joueurs
-        matchService.decrementPlayers(reservation.getMatch().getId());
+        // décrémenter uniquement si la réservation avait déjà été confirmée/payée
+        if (wasConfirmed) {
+            matchService.decrementPlayers(reservation.getMatch().getId());
+        }
 
         log.info("Reservation {} cancelled", reservationId);
     }
@@ -144,6 +149,9 @@ public class ReservationServiceImpl implements ReservationService {
 
         if (reservation.getStatut() == StatutReservation.CONFIRMEE) {
             throw new BusinessException("Reservation is already confirmed");
+        }
+        if (reservation.getStatut() == StatutReservation.ANNULEE) {
+            throw new BusinessException("Cancelled reservation cannot be confirmed");
         }
 
         reservation.setStatut(StatutReservation.CONFIRMEE);

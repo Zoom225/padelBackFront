@@ -66,6 +66,47 @@ public class MatchController {
     }
 
     @Operation(
+            summary = "Update an existing match",
+            description = "Allows the organizer to update date/time/type/terrain of a planned match."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Match successfully updated",
+                    content = @Content(schema = @Schema(implementation = MatchResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Business rule violation",
+                    content = @Content),
+            @ApiResponse(responseCode = "404", description = "Match or terrain not found",
+                    content = @Content)
+    })
+    @PutMapping("/{id}")
+    public ResponseEntity<MatchResponse> update(
+            @PathVariable Long id,
+            @Valid @RequestBody MatchRequest request
+    ) {
+        Match updated = matchService.update(id, matchMapper.toEntity(request), request.getOrganisateurId(), request.getTerrainId());
+        return ResponseEntity.ok(matchMapper.toResponse(updated));
+    }
+
+    @Operation(
+            summary = "Cancel a match",
+            description = "Allows the organizer to cancel their match (status set to ANNULE)."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Match successfully cancelled"),
+            @ApiResponse(responseCode = "400", description = "Business rule violation",
+                    content = @Content),
+            @ApiResponse(responseCode = "404", description = "Match not found",
+                    content = @Content)
+    })
+    @PatchMapping("/{id}/cancel")
+    public ResponseEntity<Void> cancel(
+            @PathVariable Long id,
+            @RequestParam Long requesterId
+    ) {
+        matchService.cancel(id, requesterId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(
             summary = "Get all matches",
             description = "Returns the complete list of all matches regardless of type or status. " +
                     "Includes private, public, planned, complete, and cancelled matches. Publicly accessible."

@@ -27,6 +27,7 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
+        int currentYear = LocalDate.now().getYear();
 
         // seeding uniquement si la BDD est vide
         if (siteRepository.count() > 0) {
@@ -46,7 +47,7 @@ public class DataInitializer implements CommandLineRunner {
                 .heureFermeture(LocalTime.of(22, 0))
                 .dureeMatchMinutes(90)
                 .dureeEntreMatchMinutes(15)
-                .anneeCivile(2025)
+                .anneeCivile(currentYear)
                 .build());
 
         Site siteParis = siteRepository.save(Site.builder()
@@ -56,7 +57,7 @@ public class DataInitializer implements CommandLineRunner {
                 .heureFermeture(LocalTime.of(23, 0))
                 .dureeMatchMinutes(90)
                 .dureeEntreMatchMinutes(15)
-                .anneeCivile(2025)
+                .anneeCivile(currentYear)
                 .build());
 
         log.info("DataInitializer : {} sites created", siteRepository.count());
@@ -79,14 +80,14 @@ public class DataInitializer implements CommandLineRunner {
 
         // fermeture globale (tous les sites)
         jourFermetureRepository.save(JourFermeture.builder()
-                .date(LocalDate.of(2025, 12, 25))
+                .date(LocalDate.of(currentYear, 12, 25))
                 .raison("Christmas Day")
                 .global(true)
                 .site(null)
                 .build());
 
         jourFermetureRepository.save(JourFermeture.builder()
-                .date(LocalDate.of(2025, 1, 1))
+                .date(LocalDate.of(currentYear, 1, 1))
                 .raison("New Year's Day")
                 .global(true)
                 .site(null)
@@ -94,7 +95,7 @@ public class DataInitializer implements CommandLineRunner {
 
         // fermeture spécifique au site Lyon
         jourFermetureRepository.save(JourFermeture.builder()
-                .date(LocalDate.of(2025, 7, 14))
+                .date(LocalDate.of(currentYear, 7, 14))
                 .raison("Bastille Day — Lyon site maintenance")
                 .global(false)
                 .site(siteLyon)

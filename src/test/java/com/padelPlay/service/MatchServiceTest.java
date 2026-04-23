@@ -18,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -78,6 +79,7 @@ class MatchServiceTest {
                 .typeMembre(TypeMembre.GLOBAL)
                 .solde(0.0)
                 .build();
+        organisateurGlobal.setId(1L);
 
         organisateurSite = Membre.builder()
                 .matricule("S10001")
@@ -87,6 +89,7 @@ class MatchServiceTest {
                 .solde(0.0)
                 .site(site)
                 .build();
+        organisateurSite.setId(2L);
 
         organisateurLibre = Membre.builder()
                 .matricule("L10001")
@@ -95,6 +98,7 @@ class MatchServiceTest {
                 .typeMembre(TypeMembre.LIBRE)
                 .solde(0.0)
                 .build();
+        organisateurLibre.setId(3L);
 
         matchPrive = Match.builder()
                 .terrain(terrain)
@@ -137,7 +141,7 @@ class MatchServiceTest {
             when(terrainService.getById(1L)).thenReturn(terrain);
             when(membreService.hasOutstandingBalance(1L)).thenReturn(false);
             when(membreService.hasActivePenalty(1L)).thenReturn(false);
-            when(matchRepository.findByTerrainSiteId(any())).thenReturn(List.of());
+            when(matchRepository.findByTerrainId(any())).thenReturn(List.of());
             when(matchRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             Match match = Match.builder()
@@ -164,7 +168,7 @@ class MatchServiceTest {
             when(terrainService.getById(1L)).thenReturn(terrain);
             when(membreService.hasOutstandingBalance(1L)).thenReturn(false);
             when(membreService.hasActivePenalty(1L)).thenReturn(false);
-            when(matchRepository.findByTerrainSiteId(any())).thenReturn(List.of());
+            when(matchRepository.findByTerrainId(any())).thenReturn(List.of());
             when(matchRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             Match match = Match.builder()
@@ -186,7 +190,7 @@ class MatchServiceTest {
             when(terrainService.getById(1L)).thenReturn(terrain);
             when(membreService.hasOutstandingBalance(1L)).thenReturn(false);
             when(membreService.hasActivePenalty(1L)).thenReturn(false);
-            when(matchRepository.findByTerrainSiteId(any())).thenReturn(List.of());
+            when(matchRepository.findByTerrainId(any())).thenReturn(List.of());
             when(matchRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             Match match = Match.builder()
@@ -315,7 +319,7 @@ class MatchServiceTest {
             when(terrainService.getById(1L)).thenReturn(terrain);
             when(membreService.hasOutstandingBalance(1L)).thenReturn(false);
             when(membreService.hasActivePenalty(1L)).thenReturn(false);
-            when(matchRepository.findByTerrainSiteId(any())).thenReturn(List.of());
+            when(matchRepository.findByTerrainId(any())).thenReturn(List.of());
             when(matchRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             // exactement 21 jours → doit passer
@@ -343,10 +347,12 @@ class MatchServiceTest {
             Match existingMatch = Match.builder()
                     .terrain(terrain)
                     .date(matchDate)
+                    .heureDebut(LocalTime.of(15, 0))
+                    .heureFin(LocalTime.of(16, 30))
                     .statut(StatutMatch.PLANIFIE)
                     .build();
 
-            when(matchRepository.findByTerrainSiteId(any()))
+            when(matchRepository.findByTerrainId(any()))
                     .thenReturn(List.of(existingMatch));
 
             Match newMatch = Match.builder()
@@ -380,7 +386,6 @@ class MatchServiceTest {
             when(terrainService.getById(1L)).thenReturn(terrain);
             when(membreService.hasOutstandingBalance(1L)).thenReturn(false);
             when(membreService.hasActivePenalty(1L)).thenReturn(false);
-            when(matchRepository.findByTerrainSiteId(any())).thenReturn(List.of());
 
             Match match = Match.builder()
                     .date(closedDate)
@@ -391,6 +396,87 @@ class MatchServiceTest {
             assertThatThrownBy(() -> matchService.create(match, 1L, 1L))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("closed");
+
+            verify(matchRepository, never()).save(any());
+        }
+    }
+
+    // ================================================================
+    // UPDATE
+    // ================================================================
+    @Nested
+    @DisplayName("update()")
+    class UpdateTests {
+
+        @Test
+        @DisplayName("✅ should allow organizer to update match when start is more than 24h away")
+        void shouldUpdateWhenMoreThan24HoursBeforeStart() {
+            Match existing = Match.builder()
+                    .terrain(terrain)
+                    .organisateur(organisateurGlobal)
+                    .date(LocalDate.now().plusDays(30))
+                    .heureDebut(LocalTime.of(10, 0))
+                    .heureFin(LocalTime.of(11, 30))
+                    .typeMatch(TypeMatch.PRIVE)
+                    .statut(StatutMatch.PLANIFIE)
+                    .nbJoueursActuels(1)
+                    .prixTotal(60.0)
+                    .prixParJoueur(15.0)
+                    .build();
+            existing.setId(1L);
+
+            Match update = Match.builder()
+                    .date(LocalDate.now().plusDays(31))
+                    .heureDebut(LocalTime.of(12, 0))
+                    .typeMatch(TypeMatch.PUBLIC)
+                    .build();
+
+            when(matchRepository.findById(1L)).thenReturn(Optional.of(existing));
+            when(membreService.getById(1L)).thenReturn(organisateurGlobal);
+            when(terrainService.getById(1L)).thenReturn(terrain);
+            when(matchRepository.findByTerrainId(1L)).thenReturn(List.of(existing));
+            when(matchRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            Match result = matchService.update(1L, update, 1L, 1L);
+
+            assertThat(result.getDate()).isEqualTo(update.getDate());
+            assertThat(result.getHeureDebut()).isEqualTo(LocalTime.of(12, 0));
+            assertThat(result.getTypeMatch()).isEqualTo(TypeMatch.PUBLIC);
+            assertThat(result.getHeureFin()).isEqualTo(LocalTime.of(13, 30));
+        }
+
+        @Test
+        @DisplayName("❌ should reject update less than 24h before start")
+        void shouldRejectUpdateWhenLessThan24HoursBeforeStart() {
+            LocalDateTime startSoon = LocalDateTime.now().plusHours(23);
+
+            Match existing = Match.builder()
+                    .terrain(terrain)
+                    .organisateur(organisateurGlobal)
+                    .date(startSoon.toLocalDate())
+                    .heureDebut(startSoon.toLocalTime().withSecond(0).withNano(0))
+                    .heureFin(startSoon.toLocalTime().withSecond(0).withNano(0).plusMinutes(90))
+                    .typeMatch(TypeMatch.PRIVE)
+                    .statut(StatutMatch.PLANIFIE)
+                    .nbJoueursActuels(1)
+                    .prixTotal(60.0)
+                    .prixParJoueur(15.0)
+                    .build();
+            existing.setId(1L);
+
+            Match update = Match.builder()
+                    .date(startSoon.plusDays(1).toLocalDate())
+                    .heureDebut(LocalTime.of(14, 0))
+                    .typeMatch(TypeMatch.PRIVE)
+                    .build();
+
+            when(matchRepository.findById(1L)).thenReturn(Optional.of(existing));
+            when(membreService.getById(1L)).thenReturn(organisateurGlobal);
+            when(terrainService.getById(1L)).thenReturn(terrain);
+
+            assertThatThrownBy(() -> matchService.update(1L, update, 1L, 1L))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("less than 24 hours");
 
             verify(matchRepository, never()).save(any());
         }

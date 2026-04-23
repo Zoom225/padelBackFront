@@ -333,7 +333,7 @@ class ReservationServiceTest {
     class CancelTests {
 
         @Test
-        @DisplayName("✅ should cancel reservation and decrement match players")
+        @DisplayName("✅ should cancel EN_ATTENTE reservation without decrementing match players")
         void shouldCancelReservation() {
             Paiement paiement = Paiement.builder()
                     .montant(15.0)
@@ -354,7 +354,7 @@ class ReservationServiceTest {
             reservationService.cancel(1L);
 
             assertThat(reservation.getStatut()).isEqualTo(StatutReservation.ANNULEE);
-            verify(matchService, times(1)).decrementPlayers(matchPublic.getId());
+            verify(matchService, never()).decrementPlayers(any());
         }
 
         @Test
@@ -381,6 +381,7 @@ class ReservationServiceTest {
             // paiement doit passer à REMBOURSE
             assertThat(paiement.getStatut()).isEqualTo(StatutPaiement.REMBOURSE);
             verify(paiementRepository, times(1)).save(paiement);
+            verify(matchService, times(1)).decrementPlayers(matchPublic.getId());
         }
 
         @Test

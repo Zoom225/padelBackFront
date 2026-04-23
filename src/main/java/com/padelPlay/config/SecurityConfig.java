@@ -9,6 +9,7 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,6 +26,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
+                .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
@@ -45,6 +47,13 @@ public class SecurityConfig {
 
                         // matches → lecture publique (voir les matchs publics)
                         .requestMatchers(HttpMethod.GET, "/api/matches/**").permitAll()
+                        // matches → creation membre (pas de login user, uniquement matricule)
+                        .requestMatchers(HttpMethod.POST, "/api/matches").permitAll()
+
+                        // sites/terrains/jours de fermeture → lecture publique (creation match + affichage)
+                        .requestMatchers(HttpMethod.GET, "/api/sites/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/terrains/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/jours-fermeture/**").permitAll()
 
                         // réservations → lecture publique
                         .requestMatchers(HttpMethod.GET, "/api/reservations/**").permitAll()

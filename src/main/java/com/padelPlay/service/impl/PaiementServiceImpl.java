@@ -4,6 +4,7 @@ import com.padelPlay.entity.Match;
 import com.padelPlay.entity.Membre;
 import com.padelPlay.entity.Paiement;
 import com.padelPlay.entity.Reservation;
+import com.padelPlay.entity.enums.StatutReservation;
 import com.padelPlay.entity.enums.StatutPaiement;
 import com.padelPlay.exception.BusinessException;
 import com.padelPlay.exception.ResourceNotFoundException;
@@ -47,6 +48,9 @@ public class PaiementServiceImpl implements PaiementService {
 
         if (paiement.getStatut() == StatutPaiement.PAYE) {
             throw new BusinessException("Payment already done for this reservation");
+        }
+        if (reservation.getStatut() == StatutReservation.ANNULEE) {
+            throw new BusinessException("Cannot pay a cancelled reservation");
         }
 
         // règle : si solde dû, on l'ajoute au montant

@@ -16,7 +16,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.temporal.ChronoUnit;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 
@@ -37,6 +39,8 @@ public class MatchServiceImpl implements MatchService {
     public Match create(Match match, Long organisateurId, Long terrainId) {
         Membre organisateur = membreService.getById(organisateurId);
         Terrain terrain     = terrainService.getById(terrainId);
+        LocalTime heureFin = match.getHeureDebut()
+                .plusMinutes(terrain.getSite().getDureeMatchMinutes());
 
         // règle : solde dû bloque la création
         if (membreService.hasOutstandingBalance(organisateurId)) {
@@ -50,9 +54,10 @@ public class MatchServiceImpl implements MatchService {
 
         // règle : vérifier le délai de réservation selon le type de membre
         validateBookingDelay(organisateur, match.getDate());
+        validateSiteSchedulingRules(terrain, match.getDate(), match.getHeureDebut(), heureFin);
 
         // règle : vérifier que le créneau est disponible sur ce terrain
-        if (!isSlotAvailable(terrainId, match.getDate())) {
+        if (!isSlotAvailable(terrainId, match.getDate(), match.getHeureDebut(), heureFin)) {
             throw new BusinessException("This slot is already booked on terrain : " + terrainId);
         }
 
@@ -60,9 +65,6 @@ public class MatchServiceImpl implements MatchService {
         validateSiteNotClosed(terrain, match.getDate());
 
         // calcul des heures de fin selon la config du site
-        LocalTime heureFin = match.getHeureDebut()
-                .plusMinutes(terrain.getSite().getDureeMatchMinutes());
-
         match.setOrganisateur(organisateur);
         match.setTerrain(terrain);
         match.setHeureFin(heureFin);
@@ -75,6 +77,65 @@ public class MatchServiceImpl implements MatchService {
                 organisateurId, terrainId, match.getDate());
 
         return matchRepository.save(match);
+    }
+
+    @Override
+    @Transactional
+    public Match update(Long matchId, Match matchUpdate, Long requesterId, Long terrainId) {
+        Match existingMatch = getById(matchId);
+        Membre requester = membreService.getById(requesterId);
+        Terrain terrain = terrainService.getById(terrainId);
+
+        if (!existingMatch.getOrganisateur().getId().equals(requester.getId())) {
+            throw new BusinessException("Only the organizer can update this match");
+        }
+
+        if (existingMatch.getStatut() == StatutMatch.ANNULE) {
+            throw new BusinessException("Cancelled match cannot be updated");
+        }
+
+        LocalDateTime startDateTime = LocalDateTime.of(existingMatch.getDate(), existingMatch.getHeureDebut());
+        if (startDateTime.isBefore(LocalDateTime.now().plusHours(24))) {
+            throw new BusinessException("Match cannot be updated less than 24 hours before start");
+        }
+
+        LocalTime heureFin = matchUpdate.getHeureDebut().plusMinutes(terrain.getSite().getDureeMatchMinutes());
+
+        validateBookingDelay(requester, matchUpdate.getDate());
+        validateSiteSchedulingRules(terrain, matchUpdate.getDate(), matchUpdate.getHeureDebut(), heureFin);
+
+        if (!isSlotAvailableForUpdate(matchId, terrainId, matchUpdate.getDate(), matchUpdate.getHeureDebut(), heureFin)) {
+            throw new BusinessException("This slot is already booked on terrain : " + terrainId);
+        }
+
+        validateSiteNotClosed(terrain, matchUpdate.getDate());
+
+        existingMatch.setTerrain(terrain);
+        existingMatch.setDate(matchUpdate.getDate());
+        existingMatch.setHeureDebut(matchUpdate.getHeureDebut());
+        existingMatch.setHeureFin(heureFin);
+        existingMatch.setTypeMatch(matchUpdate.getTypeMatch());
+
+        log.info("Match {} updated by organizer {}", matchId, requesterId);
+        return matchRepository.save(existingMatch);
+    }
+
+    @Override
+    @Transactional
+    public void cancel(Long matchId, Long requesterId) {
+        Match match = getById(matchId);
+
+        if (!match.getOrganisateur().getId().equals(requesterId)) {
+            throw new BusinessException("Only the organizer can cancel this match");
+        }
+
+        if (match.getStatut() == StatutMatch.ANNULE) {
+            throw new BusinessException("Match is already cancelled");
+        }
+
+        match.setStatut(StatutMatch.ANNULE);
+        matchRepository.save(match);
+        log.info("Match {} cancelled by organizer {}", matchId, requesterId);
     }
 
     @Override
@@ -182,18 +243,36 @@ public class MatchServiceImpl implements MatchService {
     }
 
     @Override
-    public boolean isSlotAvailable(Long terrainId, LocalDate date) {
-        List<Match> existing = matchRepository.findByTerrainSiteId(terrainId)
+    public boolean isSlotAvailable(Long terrainId, LocalDate date, LocalTime heureDebut, LocalTime heureFin) {
+        List<Match> existing = matchRepository.findByTerrainId(terrainId)
                 .stream()
                 .filter(m -> m.getDate().equals(date))
                 .filter(m -> m.getStatut() != StatutMatch.ANNULE)
                 .toList();
-        return existing.isEmpty();
+
+        return existing.stream().noneMatch(existingMatch ->
+                heureDebut.isBefore(existingMatch.getHeureFin())
+                        && heureFin.isAfter(existingMatch.getHeureDebut())
+        );
+    }
+
+    private boolean isSlotAvailableForUpdate(Long matchId, Long terrainId, LocalDate date, LocalTime heureDebut, LocalTime heureFin) {
+        List<Match> existing = matchRepository.findByTerrainId(terrainId)
+                .stream()
+                .filter(m -> !m.getId().equals(matchId))
+                .filter(m -> m.getDate().equals(date))
+                .filter(m -> m.getStatut() != StatutMatch.ANNULE)
+                .toList();
+
+        return existing.stream().noneMatch(existingMatch ->
+                heureDebut.isBefore(existingMatch.getHeureFin())
+                        && heureFin.isAfter(existingMatch.getHeureDebut())
+        );
     }
 
     private void validateBookingDelay(Membre membre, LocalDate matchDate) {
         LocalDate today = LocalDate.now();
-        long daysUntilMatch = today.until(matchDate).getDays();
+        long daysUntilMatch = ChronoUnit.DAYS.between(today, matchDate);
 
         int requiredDays = switch (membre.getTypeMembre()) {
             case GLOBAL -> 21;  // 3 semaines
@@ -210,9 +289,8 @@ public class MatchServiceImpl implements MatchService {
     }
 
     private void validateSiteNotClosed(Terrain terrain, LocalDate date) {
-
         if (terrain.getSite().getJoursFermeture() == null) {
-            throw new BusinessException("Site has no closed days");
+            return;
         }
 
         boolean isClosed = terrain.getSite().getJoursFermeture()
@@ -221,6 +299,16 @@ public class MatchServiceImpl implements MatchService {
 
         if (isClosed) {
             throw new BusinessException("The site is closed on : " + date);
+        }
+    }
+
+    private void validateSiteSchedulingRules(Terrain terrain, LocalDate date, LocalTime heureDebut, LocalTime heureFin) {
+
+        LocalTime ouverture = terrain.getSite().getHeureOuverture();
+        LocalTime fermeture = terrain.getSite().getHeureFermeture();
+
+        if (heureDebut.isBefore(ouverture) || heureFin.isAfter(fermeture)) {
+            throw new BusinessException("Requested slot is outside site opening hours");
         }
     }
 }
