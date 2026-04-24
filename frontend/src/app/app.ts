@@ -37,6 +37,7 @@ import { MemberSessionService } from './core/auth/member-session.service';
             <a routerLink="/member/reservations" routerLinkActive="nav-active" class="nav-link">Réservations</a>
             <a routerLink="/member/payments" routerLinkActive="nav-active" class="nav-link">Paiements</a>
             <div class="nav-divider"></div>
+            <a routerLink="/member/matches/new" class="nav-btn-create">➕ Créer un match</a>
             <a routerLink="/member/matches/new" [queryParams]="{type:'PUBLIC'}" class="nav-btn-green">🎾 Match PUBLIC</a>
             <a routerLink="/member/matches/new" [queryParams]="{type:'PRIVE'}" class="nav-btn-purple">🔒 Match PRIVÉ</a>
             <div class="nav-divider"></div>
@@ -162,6 +163,21 @@ import { MemberSessionService } from './core/auth/member-session.service';
       transition: transform 0.15s;
     }
     .nav-btn-green:hover { transform: translateY(-1px); }
+
+    .nav-btn-create {
+      background: linear-gradient(135deg, #ea580c, #f97316);
+      color: #fff;
+      border: none;
+      border-radius: 9999px;
+      padding: 0.4rem 1rem;
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+      box-shadow: 0 2px 8px rgba(234,88,12,0.35);
+      transition: transform 0.15s;
+    }
+    .nav-btn-create:hover { transform: translateY(-1px); }
 
     .nav-btn-purple {
       background: linear-gradient(135deg, #6d28d9, #7c3aed);
