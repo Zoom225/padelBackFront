@@ -3,11 +3,13 @@ package com.padelPlay.service.impl;
 import com.padelPlay.entity.Match;
 import com.padelPlay.entity.Membre;
 import com.padelPlay.entity.Terrain;
+import com.padelPlay.entity.JourFermeture;
 import com.padelPlay.entity.enums.StatutMatch;
 import com.padelPlay.entity.enums.StatutReservation;
 import com.padelPlay.entity.enums.TypeMatch;
 import com.padelPlay.exception.BusinessException;
 import com.padelPlay.exception.ResourceNotFoundException;
+import com.padelPlay.repository.JourFermetureRepository;
 import com.padelPlay.repository.MatchRepository;
 import com.padelPlay.repository.ReservationRepository;
 import com.padelPlay.service.MatchService;
@@ -23,6 +25,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -34,6 +38,7 @@ public class MatchServiceImpl implements MatchService {
 
     private final MatchRepository matchRepository;
     private final ReservationRepository reservationRepository;
+    private final JourFermetureRepository jourFermetureRepository;
     private final MembreService membreService;
     private final TerrainService terrainService;
 
@@ -255,10 +260,11 @@ public class MatchServiceImpl implements MatchService {
                 .filter(m -> m.getStatut() != StatutMatch.ANNULE)
                 .toList();
 
+        Terrain terrain = terrainService.getById(terrainId);
+        int breakMinutes = terrain.getSite().getDureeEntreMatchMinutes();
+
         return existing.stream().noneMatch(existingMatch ->
-                heureDebut.isBefore(existingMatch.getHeureFin())
-                        && heureFin.isAfter(existingMatch.getHeureDebut())
-        );
+                hasSlotConflictWithBuffer(heureDebut, heureFin, existingMatch, breakMinutes));
     }
 
     private boolean isSlotAvailableForUpdate(Long matchId, Long terrainId, LocalDate date, LocalTime heureDebut, LocalTime heureFin) {
@@ -269,10 +275,21 @@ public class MatchServiceImpl implements MatchService {
                 .filter(m -> m.getStatut() != StatutMatch.ANNULE)
                 .toList();
 
+        Terrain terrain = terrainService.getById(terrainId);
+        int breakMinutes = terrain.getSite().getDureeEntreMatchMinutes();
+
         return existing.stream().noneMatch(existingMatch ->
-                heureDebut.isBefore(existingMatch.getHeureFin())
-                        && heureFin.isAfter(existingMatch.getHeureDebut())
-        );
+                hasSlotConflictWithBuffer(heureDebut, heureFin, existingMatch, breakMinutes));
+    }
+
+    private boolean hasSlotConflictWithBuffer(LocalTime newStart, LocalTime newEnd, Match existingMatch, int breakMinutes) {
+        LocalTime existingStart = existingMatch.getHeureDebut();
+        LocalTime existingEnd = existingMatch.getHeureFin();
+
+        boolean newEndsBeforeExistingWithBreak = !newEnd.plusMinutes(breakMinutes).isAfter(existingStart);
+        boolean newStartsAfterExistingWithBreak = !newStart.isBefore(existingEnd.plusMinutes(breakMinutes));
+
+        return !(newEndsBeforeExistingWithBreak || newStartsAfterExistingWithBreak);
     }
 
     private void validateBookingDelay(Membre membre, LocalDate matchDate) {
@@ -294,12 +311,15 @@ public class MatchServiceImpl implements MatchService {
     }
 
     private void validateSiteNotClosed(Terrain terrain, LocalDate date) {
-        if (terrain.getSite().getJoursFermeture() == null) {
-            return;
-        }
+        List<JourFermeture> globalClosures = Optional
+                .ofNullable(jourFermetureRepository.findByGlobalTrue())
+                .orElse(List.of());
 
-        boolean isClosed = terrain.getSite().getJoursFermeture()
-                .stream()
+        List<JourFermeture> siteClosures = Optional
+                .ofNullable(jourFermetureRepository.findBySiteId(terrain.getSite().getId()))
+                .orElse(List.of());
+
+        boolean isClosed = Stream.concat(globalClosures.stream(), siteClosures.stream())
                 .anyMatch(j -> j.getDate().equals(date));
 
         if (isClosed) {

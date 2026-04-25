@@ -4,6 +4,7 @@ import com.padelPlay.dto.request.SiteRequest;
 import com.padelPlay.dto.response.SiteResponse;
 import com.padelPlay.entity.Site;
 import com.padelPlay.mapper.SiteMapper;
+import com.padelPlay.service.AdminAccessService;
 import com.padelPlay.service.SiteService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -29,6 +30,7 @@ public class SiteController {
 
     private final SiteService siteService;
     private final SiteMapper siteMapper;
+    private final AdminAccessService adminAccessService;
 
     @Operation(
             summary = "Create a new site",
@@ -45,6 +47,7 @@ public class SiteController {
     })
     @PostMapping
     public ResponseEntity<SiteResponse> create(@Valid @RequestBody SiteRequest request) {
+        adminAccessService.assertGlobalAdmin();
         Site site = siteMapper.toEntity(request);
         Site saved = siteService.create(site);
         return ResponseEntity.status(HttpStatus.CREATED).body(siteMapper.toResponse(saved));
@@ -104,6 +107,7 @@ public class SiteController {
             @Parameter(description = "ID of the site to update", required = true)
             @PathVariable Long id,
             @Valid @RequestBody SiteRequest request) {
+        adminAccessService.assertCanAccessSite(id);
         Site site = siteMapper.toEntity(request);
         Site updated = siteService.update(id, site);
         return ResponseEntity.ok(siteMapper.toResponse(updated));
@@ -125,6 +129,7 @@ public class SiteController {
     public ResponseEntity<Void> delete(
             @Parameter(description = "ID of the site to delete", required = true)
             @PathVariable Long id) {
+        adminAccessService.assertCanAccessSite(id);
         siteService.delete(id);
         return ResponseEntity.noContent().build();
     }

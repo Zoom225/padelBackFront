@@ -4,6 +4,7 @@ import com.padelPlay.dto.request.MatchRequest;
 import com.padelPlay.dto.response.MatchResponse;
 import com.padelPlay.entity.Match;
 import com.padelPlay.mapper.MatchMapper;
+import com.padelPlay.service.AdminAccessService;
 import com.padelPlay.service.MatchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -37,6 +38,7 @@ public class MatchController {
 
     private final MatchService matchService;
     private final MatchMapper matchMapper;
+    private final AdminAccessService adminAccessService;
 
     @Operation(
             summary = "Create a new match",
@@ -233,6 +235,8 @@ public class MatchController {
     public ResponseEntity<Void> convertToPublic(
             @Parameter(description = "ID of the private match to convert to public", required = true)
             @PathVariable Long id) {
+        Match match = matchService.getById(id);
+        adminAccessService.assertCanAccessSite(match.getTerrain().getSite().getId());
         matchService.convertToPublic(id);
         return ResponseEntity.noContent().build();
     }

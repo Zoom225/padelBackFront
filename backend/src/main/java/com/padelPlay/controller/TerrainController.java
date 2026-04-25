@@ -4,6 +4,7 @@ import com.padelPlay.dto.request.TerrainRequest;
 import com.padelPlay.dto.response.TerrainResponse;
 import com.padelPlay.entity.Terrain;
 import com.padelPlay.mapper.TerrainMapper;
+import com.padelPlay.service.AdminAccessService;
 import com.padelPlay.service.TerrainService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -29,6 +30,7 @@ public class TerrainController {
 
     private final TerrainService terrainService;
     private final TerrainMapper terrainMapper;
+    private final AdminAccessService adminAccessService;
 
     @Operation(
             summary = "Create a new court",
@@ -47,6 +49,7 @@ public class TerrainController {
     })
     @PostMapping
     public ResponseEntity<TerrainResponse> create(@Valid @RequestBody TerrainRequest request) {
+        adminAccessService.assertCanAccessSite(request.getSiteId());
         Terrain terrain = terrainMapper.toEntity(request);
         Terrain saved = terrainService.create(terrain, request.getSiteId());
         return ResponseEntity.status(HttpStatus.CREATED).body(terrainMapper.toResponse(saved));
@@ -127,6 +130,8 @@ public class TerrainController {
             @Parameter(description = "ID of the court to update", required = true)
             @PathVariable Long id,
             @Valid @RequestBody TerrainRequest request) {
+        Terrain existing = terrainService.getById(id);
+        adminAccessService.assertCanAccessSite(existing.getSite().getId());
         Terrain terrain = terrainMapper.toEntity(request);
         Terrain updated = terrainService.update(id, terrain);
         return ResponseEntity.ok(terrainMapper.toResponse(updated));
@@ -148,6 +153,8 @@ public class TerrainController {
     public ResponseEntity<Void> delete(
             @Parameter(description = "ID of the court to delete", required = true)
             @PathVariable Long id) {
+        Terrain existing = terrainService.getById(id);
+        adminAccessService.assertCanAccessSite(existing.getSite().getId());
         terrainService.delete(id);
         return ResponseEntity.noContent().build();
     }

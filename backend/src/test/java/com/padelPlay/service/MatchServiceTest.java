@@ -7,6 +7,7 @@ import com.padelPlay.entity.enums.TypeMatch;
 import com.padelPlay.entity.enums.TypeMembre;
 import com.padelPlay.exception.BusinessException;
 import com.padelPlay.exception.ResourceNotFoundException;
+import com.padelPlay.repository.JourFermetureRepository;
 import com.padelPlay.repository.MatchRepository;
 import com.padelPlay.repository.ReservationRepository;
 import com.padelPlay.service.impl.MatchServiceImpl;
@@ -39,6 +40,9 @@ class MatchServiceTest {
 
     @Mock
     private ReservationRepository reservationRepository;
+
+    @Mock
+    private JourFermetureRepository jourFermetureRepository;
 
     @Mock
     private MembreService membreService;
@@ -384,6 +388,9 @@ class MatchServiceTest {
 
             site.setJoursFermeture(List.of(jourFermeture));
 
+            when(jourFermetureRepository.findByGlobalTrue()).thenReturn(List.of());
+            when(jourFermetureRepository.findBySiteId(site.getId())).thenReturn(List.of(jourFermeture));
+
             when(membreService.getById(1L)).thenReturn(organisateurGlobal);
             when(terrainService.getById(1L)).thenReturn(terrain);
             when(membreService.hasOutstandingBalance(1L)).thenReturn(false);
@@ -400,6 +407,106 @@ class MatchServiceTest {
                     .hasMessageContaining("closed");
 
             verify(matchRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("❌ should throw BusinessException when date is globally closed")
+        void shouldThrowWhenDateIsGloballyClosed() {
+            LocalDate closedDate = LocalDate.now().plusDays(30);
+
+            JourFermeture globalClosure = JourFermeture.builder()
+                    .date(closedDate)
+                    .raison("Global closure")
+                    .global(true)
+                    .site(null)
+                    .build();
+
+            when(jourFermetureRepository.findByGlobalTrue()).thenReturn(List.of(globalClosure));
+            when(jourFermetureRepository.findBySiteId(site.getId())).thenReturn(List.of());
+
+            when(membreService.getById(1L)).thenReturn(organisateurGlobal);
+            when(terrainService.getById(1L)).thenReturn(terrain);
+            when(membreService.hasOutstandingBalance(1L)).thenReturn(false);
+            when(membreService.hasActivePenalty(1L)).thenReturn(false);
+            when(matchRepository.findByTerrainId(any())).thenReturn(List.of());
+
+            Match match = Match.builder()
+                    .date(closedDate)
+                    .heureDebut(LocalTime.of(15, 0))
+                    .typeMatch(TypeMatch.PRIVE)
+                    .build();
+
+            assertThatThrownBy(() -> matchService.create(match, 1L, 1L))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("closed");
+
+            verify(matchRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("❌ should throw BusinessException when break between matches is not respected")
+        void shouldThrowWhenBreakBetweenMatchesIsNotRespected() {
+
+            when(membreService.getById(1L)).thenReturn(organisateurGlobal);
+            when(terrainService.getById(1L)).thenReturn(terrain);
+            when(membreService.hasOutstandingBalance(1L)).thenReturn(false);
+            when(membreService.hasActivePenalty(1L)).thenReturn(false);
+
+            Match existingMatch = Match.builder()
+                    .terrain(terrain)
+                    .date(LocalDate.now().plusDays(25))
+                    .heureDebut(LocalTime.of(15, 0))
+                    .heureFin(LocalTime.of(16, 30))
+                    .statut(StatutMatch.PLANIFIE)
+                    .build();
+
+            when(matchRepository.findByTerrainId(any())).thenReturn(List.of(existingMatch));
+
+            Match newMatch = Match.builder()
+                    .date(LocalDate.now().plusDays(25))
+                    .heureDebut(LocalTime.of(16, 35))
+                    .typeMatch(TypeMatch.PRIVE)
+                    .build();
+
+            assertThatThrownBy(() -> matchService.create(newMatch, 1L, 1L))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("already booked");
+
+            verify(matchRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("✅ should allow slot when break between matches is respected")
+        void shouldAllowSlotWhenBreakIsRespected() {
+            when(jourFermetureRepository.findByGlobalTrue()).thenReturn(List.of());
+            when(jourFermetureRepository.findBySiteId(site.getId())).thenReturn(List.of());
+
+            when(membreService.getById(1L)).thenReturn(organisateurGlobal);
+            when(terrainService.getById(1L)).thenReturn(terrain);
+            when(membreService.hasOutstandingBalance(1L)).thenReturn(false);
+            when(membreService.hasActivePenalty(1L)).thenReturn(false);
+
+            Match existingMatch = Match.builder()
+                    .terrain(terrain)
+                    .date(LocalDate.now().plusDays(25))
+                    .heureDebut(LocalTime.of(15, 0))
+                    .heureFin(LocalTime.of(16, 30))
+                    .statut(StatutMatch.PLANIFIE)
+                    .build();
+
+            when(matchRepository.findByTerrainId(any())).thenReturn(List.of(existingMatch));
+            when(matchRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            Match newMatch = Match.builder()
+                    .date(LocalDate.now().plusDays(25))
+                    .heureDebut(LocalTime.of(16, 45))
+                    .typeMatch(TypeMatch.PRIVE)
+                    .build();
+
+            Match result = matchService.create(newMatch, 1L, 1L);
+
+            assertThat(result).isNotNull();
+            assertThat(result.getHeureFin()).isEqualTo(LocalTime.of(18, 15));
         }
     }
 

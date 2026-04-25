@@ -5,6 +5,7 @@ import com.padelPlay.dto.response.MembreResponse;
 import com.padelPlay.entity.Membre;
 import com.padelPlay.entity.Site;
 import com.padelPlay.mapper.MembreMapper;
+import com.padelPlay.service.AdminAccessService;
 import com.padelPlay.service.MembreService;
 import com.padelPlay.service.SiteService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,6 +37,7 @@ public class MembreController {
     private final MembreService membreService;
     private final SiteService siteService;
     private final MembreMapper membreMapper;
+    private final AdminAccessService adminAccessService;
 
     @Operation(
             summary = "Register a new member",
@@ -182,6 +184,10 @@ public class MembreController {
             @Parameter(description = "ID of the member to update", required = true)
             @PathVariable Long id,
             @Valid @RequestBody MembreRequest request) {
+        Membre existing = membreService.getById(id);
+        Long existingSiteId = existing.getSite() != null ? existing.getSite().getId() : null;
+        adminAccessService.assertCanManageMember(existingSiteId);
+
         Membre membre = membreMapper.toEntity(request);
         Membre updated = membreService.update(id, membre);
         return ResponseEntity.ok(membreMapper.toResponse(updated));
@@ -204,6 +210,10 @@ public class MembreController {
     public ResponseEntity<Void> delete(
             @Parameter(description = "ID of the member to delete", required = true)
             @PathVariable Long id) {
+        Membre existing = membreService.getById(id);
+        Long existingSiteId = existing.getSite() != null ? existing.getSite().getId() : null;
+        adminAccessService.assertCanManageMember(existingSiteId);
+
         membreService.delete(id);
         return ResponseEntity.noContent().build();
     }

@@ -5,6 +5,7 @@ import com.padelPlay.dto.response.JourFermetureResponse;
 import com.padelPlay.entity.JourFermeture;
 import com.padelPlay.entity.Site;
 import com.padelPlay.mapper.JourFermetureMapper;
+import com.padelPlay.service.AdminAccessService;
 import com.padelPlay.service.JourFermetureService;
 import com.padelPlay.service.SiteService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,10 +28,17 @@ public class JourFermetureController {
     private final JourFermetureService jourFermetureService;
     private final SiteService siteService;
     private final JourFermetureMapper jourFermetureMapper;
+    private final AdminAccessService adminAccessService;
 
     @Operation(summary = "Creer un jour de fermeture", security = @SecurityRequirement(name = "Bearer Auth"))
     @PostMapping
     public ResponseEntity<JourFermetureResponse> create(@Valid @RequestBody JourFermetureRequest request) {
+        if (Boolean.TRUE.equals(request.getGlobal())) {
+            adminAccessService.assertGlobalAdmin();
+        } else if (request.getSiteId() != null) {
+            adminAccessService.assertCanAccessSite(request.getSiteId());
+        }
+
         Site site = (request.getSiteId() != null) ? siteService.getById(request.getSiteId()) : null;
         JourFermeture entity = jourFermetureMapper.toEntity(request, site);
         JourFermeture saved = jourFermetureService.create(entity);
@@ -70,6 +78,12 @@ public class JourFermetureController {
     @Operation(summary = "Supprimer un jour de fermeture", security = @SecurityRequirement(name = "Bearer Auth"))
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
+        JourFermeture existing = jourFermetureService.getById(id);
+        if (Boolean.TRUE.equals(existing.getGlobal())) {
+            adminAccessService.assertGlobalAdmin();
+        } else if (existing.getSite() != null) {
+            adminAccessService.assertCanAccessSite(existing.getSite().getId());
+        }
         jourFermetureService.delete(id);
         return ResponseEntity.noContent().build();
     }
